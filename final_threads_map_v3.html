@@ -1,0 +1,1333 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Threads 地圖收藏 v3</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <style>
+        * { box-sizing: border-box; }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f8f9fa;
+        }
+
+        /* 白色自然風格按鈕 */
+        .btn {
+            position: fixed;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: white;
+            border: 2px solid #e9ecef;
+            color: #495057;
+            font-size: 16px;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            transition: all 0.2s ease;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            border-color: #ced4da;
+        }
+
+        .btn-add { top: 20px; left: 20px; }
+        .btn-list { top: 20px; right: 20px; }
+        .btn-export { 
+            top: 85px; 
+            right: 20px; 
+            color: #28a745;
+            border-color: #c3e6cb;
+        }
+        .btn-import { 
+            top: 150px; 
+            right: 20px; 
+            color: #fd7e14;
+            border-color: #ffeaa7;
+        }
+
+        .btn-export:hover { background: #f8fff9; }
+        .btn-import:hover { background: #fff8f0; }
+
+        /* 彈窗 */
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(4px);
+            z-index: 2000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .dialog {
+            background: white;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 480px;
+            max-height: 80vh;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .dialog-header {
+            background: white;
+            color: #343a40;
+            padding: 24px 28px;
+            font-size: 18px;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #f1f3f4;
+        }
+
+        .close {
+            background: none;
+            border: none;
+            color: #6c757d;
+            font-size: 24px;
+            cursor: pointer;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .close:hover { 
+            background: #f8f9fa;
+            color: #495057;
+        }
+
+        .dialog-body {
+            padding: 28px;
+            overflow-y: auto;
+            max-height: 60vh;
+        }
+
+        .field {
+            margin-bottom: 24px;
+        }
+
+        .label {
+            display: block;
+            font-size: 15px;
+            font-weight: 500;
+            color: #495057;
+            margin-bottom: 8px;
+        }
+
+        .input {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            font-size: 15px;
+            transition: all 0.2s;
+            background: #fafbfc;
+        }
+
+        .input:focus {
+            outline: none;
+            border-color: #80bdff;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+            background: white;
+        }
+
+        .status {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 10px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+
+        .status-row {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .status-row:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+
+        .dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            margin-right: 12px;
+            margin-top: 2px;
+            flex-shrink: 0;
+        }
+
+        .dot-wait { background: #ffc107; }
+        .dot-ok { background: #28a745; }
+        .dot-error { background: #dc3545; }
+
+        .status-info {
+            flex: 1;
+        }
+
+        .status-title {
+            font-weight: 500;
+            color: #495057;
+            margin-bottom: 4px;
+        }
+
+        .status-desc {
+            color: #6c757d;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .action {
+            width: 100%;
+            padding: 16px 20px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: white;
+            color: #6c757d;
+            margin-top: 20px;
+        }
+
+        .action.ready {
+            background: #e3f2fd;
+            border-color: #2196f3;
+            color: #1976d2;
+        }
+
+        .action.ready:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(33, 150, 243, 0.2);
+            background: #e1f5fe;
+        }
+
+        .action:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* 地圖 */
+        #map {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            z-index: 100;
+        }
+
+        /* 通知 */
+        .toast {
+            position: fixed;
+            top: 90px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            padding: 14px 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+            font-size: 14px;
+            font-weight: 500;
+            z-index: 3000;
+            display: none;
+            border-left: 4px solid #28a745;
+            max-width: 320px;
+            text-align: center;
+        }
+
+        .toast.error { border-left-color: #dc3545; }
+        .toast.warning { border-left-color: #ffc107; }
+
+        /* 側欄 */
+        .panel {
+            position: fixed;
+            top: 0;
+            right: -380px;
+            width: 380px;
+            height: 100vh;
+            background: white;
+            box-shadow: -2px 0 16px rgba(0, 0, 0, 0.1);
+            z-index: 1500;
+            transition: right 0.3s ease;
+            overflow-y: auto;
+        }
+
+        .panel.show { right: 0; }
+
+        .panel-header {
+            background: white;
+            color: #495057;
+            padding: 24px 28px;
+            font-size: 18px;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #f1f3f4;
+        }
+
+        .panel-tools {
+            display: flex;
+            gap: 8px;
+        }
+
+        .mini-btn {
+            background: none;
+            border: 2px solid #e9ecef;
+            color: #6c757d;
+            font-size: 14px;
+            cursor: pointer;
+            padding: 6px;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .mini-btn:hover {
+            background: #f8f9fa;
+            border-color: #ced4da;
+        }
+
+        .mini-btn.red {
+            border-color: #f8d7da;
+            color: #dc3545;
+        }
+
+        .mini-btn.red:hover {
+            background: #f8d7da;
+        }
+
+        .places {
+            padding: 20px;
+        }
+
+        .card {
+            background: #fafbfc;
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .card:hover {
+            border-color: #80bdff;
+            box-shadow: 0 2px 8px rgba(0, 123, 255, 0.1);
+            transform: translateY(-1px);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .number {
+            background: white;
+            color: #495057;
+            border: 2px solid #e9ecef;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-right: 10px;
+        }
+
+        .title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .coords {
+            color: #6c757d;
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+
+        .preview {
+            color: #6c757d;
+            font-size: 13px;
+            line-height: 1.4;
+            font-style: italic;
+        }
+
+        /* 地圖標記 */
+        .marker {
+            background: white;
+            color: #495057;
+            border: 3px solid #e9ecef;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        /* 彈出視窗 */
+        .popup {
+            max-width: 320px;
+            font-family: inherit;
+        }
+
+        .popup-head {
+            background: white;
+            color: #495057;
+            padding: 16px 20px;
+            border-radius: 12px 12px 0 0;
+            font-weight: 600;
+            font-size: 16px;
+            margin: -16px -20px 16px -20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 1px solid #f1f3f4;
+        }
+
+        .popup-head::before { content: "📍"; font-size: 18px; }
+
+        .popup-coords {
+            color: #6c757d;
+            font-size: 12px;
+            margin-bottom: 12px;
+            text-align: center;
+        }
+
+        .bubble {
+            background: #f8f9fa;
+            border-radius: 16px;
+            padding: 14px 18px;
+            margin: 12px 0;
+            font-size: 14px;
+            line-height: 1.5;
+            color: #495057;
+            position: relative;
+            border: 1px solid #e9ecef;
+        }
+
+        .bubble::before {
+            content: "";
+            position: absolute;
+            top: 14px;
+            left: -8px;
+            width: 0;
+            height: 0;
+            border-top: 8px solid transparent;
+            border-bottom: 8px solid transparent;
+            border-right: 8px solid #f8f9fa;
+        }
+
+        .popup-btns {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+            justify-content: center;
+        }
+
+        .popup-btn {
+            padding: 8px 16px;
+            border: 2px solid #e9ecef;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+            transition: all 0.2s;
+            background: white;
+            color: #495057;
+        }
+
+        .popup-btn:hover { 
+            transform: translateY(-1px);
+            background: #f8f9fa;
+            border-color: #ced4da;
+        }
+
+        .popup-btn.red {
+            border-color: #f8d7da;
+            color: #dc3545;
+        }
+
+        .popup-btn.red:hover {
+            background: #f8d7da;
+        }
+
+        .more {
+            color: #495057;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 12px;
+            display: inline-block;
+            margin-top: 10px;
+            padding: 6px 12px;
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 16px;
+            transition: all 0.2s;
+        }
+
+        .more:hover {
+            background: #f8f9fa;
+            border-color: #ced4da;
+        }
+
+        .leaflet-popup-content-wrapper {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+            border: none;
+            padding: 0;
+        }
+
+        .leaflet-popup-content { margin: 0; padding: 16px 20px; }
+        .leaflet-popup-tip { background: white; border: none; }
+    </style>
+</head>
+<body>
+    <!-- 浮動按鈕 -->
+    <button class="btn btn-add" onclick="app.openAdd()">+</button>
+    <button class="btn btn-list" onclick="app.togglePanel()">⋮</button>
+    <button class="btn btn-export" onclick="app.export()">📥</button>
+    <button class="btn btn-import" onclick="app.openImport()">📤</button>
+
+    <!-- 新增對話框 -->
+    <div id="add-dialog" class="overlay">
+        <div class="dialog">
+            <div class="dialog-header">
+                <span>📍 新增 Threads 地點</span>
+                <button class="close" onclick="app.closeAdd()">×</button>
+            </div>
+            <div class="dialog-body">
+                <div class="field">
+                    <label class="label">🗺️ Google Maps 網址</label>
+                    <input type="text" id="maps-input" class="input" placeholder="貼上 Google Maps 連結" />
+                </div>
+
+                <div class="field">
+                    <label class="label">🧵 Threads 網址</label>
+                    <input type="text" id="threads-input" class="input" placeholder="貼上 Threads 連結" />
+                </div>
+
+                <div class="status" id="status">
+                    <div class="status-row">
+                        <div class="dot dot-wait" id="loc-dot"></div>
+                        <div class="status-info">
+                            <div class="status-title">位置解析</div>
+                            <div class="status-desc" id="loc-text">等待輸入 Google Maps 網址</div>
+                        </div>
+                    </div>
+                    
+                    <div class="status-row">
+                        <div class="dot dot-wait" id="threads-dot"></div>
+                        <div class="status-info">
+                            <div class="status-title">Threads 內容</div>
+                            <div class="status-desc" id="threads-text">等待輸入 Threads 網址</div>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="submit" class="action" onclick="app.submit()">
+                    ⬆️ 上傳到地圖
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 匯入對話框 -->
+    <div id="import-dialog" class="overlay">
+        <div class="dialog">
+            <div class="dialog-header">
+                <span>📤 匯入 CSV 資料</span>
+                <button class="close" onclick="app.closeImport()">×</button>
+            </div>
+            <div class="dialog-body">
+                <div class="field">
+                    <label class="label">📁 選擇 CSV 檔案</label>
+                    <input type="file" id="csv-input" class="input" accept=".csv" />
+                </div>
+                <button class="action ready" onclick="app.import()">
+                    ⬆️ 匯入資料
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 側邊欄 -->
+    <div id="panel" class="panel">
+        <div class="panel-header">
+            <span>收藏地點 (<span id="count">0</span>)</span>
+            <div class="panel-tools">
+                <button class="mini-btn red" onclick="app.clear()" title="清空">🗑️</button>
+                <button class="mini-btn" onclick="app.togglePanel()">×</button>
+            </div>
+        </div>
+        <div id="list" class="places"></div>
+    </div>
+
+    <!-- 地圖 -->
+    <div id="map"></div>
+
+    <!-- 通知 -->
+    <div id="toast" class="toast"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script>
+        console.log('🚀 Threads 地圖系統 v3 啟動');
+
+        class ThreadsApp {
+            constructor() {
+                this.map = null;
+                this.markers = L.layerGroup();
+                this.data = [];
+                this.temp = {};
+                this.num = 1;
+                
+                this.init();
+                this.bind();
+                this.load();
+                this.refresh();
+                
+                console.log('✅ 系統就緒');
+            }
+
+            init() {
+                this.map = L.map('map', {
+                    zoomControl: false,
+                    attributionControl: false
+                }).setView([24.1477, 120.6736], 12);
+                
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                    attribution: '© OpenStreetMap, © CartoDB',
+                    maxZoom: 19
+                }).addTo(this.map);
+
+                L.control.zoom({ position: 'bottomright' }).addTo(this.map);
+                this.markers.addTo(this.map);
+            }
+
+            bind() {
+                document.getElementById('maps-input').addEventListener('input', (e) => {
+                    this.handleMaps(e.target.value);
+                });
+
+                document.getElementById('threads-input').addEventListener('input', (e) => {
+                    this.handleThreads(e.target.value);
+                });
+            }
+
+            async handleMaps(url) {
+                const dot = document.getElementById('loc-dot');
+                const text = document.getElementById('loc-text');
+                
+                if (!url.trim()) {
+                    dot.className = 'dot dot-wait';
+                    text.textContent = '等待輸入 Google Maps 網址';
+                    this.temp.location = null;
+                    this.checkReady();
+                    return;
+                }
+
+                dot.className = 'dot dot-wait';
+                text.textContent = '正在解析位置...';
+
+                await new Promise(r => setTimeout(r, 300));
+                
+                try {
+                    const coords = this.getCoords(url);
+                    const name = this.getName(url);
+                    
+                    if (coords && name) {
+                        dot.className = 'dot dot-ok';
+                        text.innerHTML = `<strong>${name}</strong><br>座標: ${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`;
+                        
+                        this.temp.location = {
+                            name: name,
+                            lat: coords.lat,
+                            lng: coords.lng,
+                            coordinates: `${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`,
+                            mapUrl: url
+                        };
+                        
+                        this.notify(`✅ 位置解析成功: ${name}`, 'success');
+                    } else {
+                        dot.className = 'dot dot-error';
+                        text.textContent = '無法解析此 Google Maps 網址';
+                        this.temp.location = null;
+                        this.notify('❌ Google Maps 網址解析失敗', 'error');
+                    }
+                } catch (error) {
+                    dot.className = 'dot dot-error';
+                    text.textContent = '解析過程發生錯誤';
+                    this.temp.location = null;
+                }
+                
+                this.checkReady();
+            }
+
+            async handleThreads(url) {
+                const dot = document.getElementById('threads-dot');
+                const text = document.getElementById('threads-text');
+                
+                if (!url.trim()) {
+                    dot.className = 'dot dot-wait';
+                    text.textContent = '等待輸入 Threads 網址';
+                    this.temp.threads = null;
+                    this.checkReady();
+                    return;
+                }
+
+                if (!url.includes('threads.com') || !url.includes('post/')) {
+                    dot.className = 'dot dot-error';
+                    text.textContent = '請輸入有效的 Threads 貼文網址';
+                    this.temp.threads = null;
+                    this.checkReady();
+                    return;
+                }
+
+                dot.className = 'dot dot-wait';
+                text.textContent = '正在獲取 Threads 內容...';
+
+                try {
+                    const content = await this.fetchContent(url);
+                    
+                    if (content && content.length > 20) {
+                        dot.className = 'dot dot-ok';
+                        const preview = content.length > 80 ? content.substring(0, 80) + '...' : content;
+                        text.innerHTML = `"${preview}"`;
+                        
+                        this.temp.threads = { content: content, url: url };
+                        this.notify('✅ Threads 內容獲取成功', 'success');
+                    } else {
+                        const user = this.getUser(url);
+                        const fallback = `來自 @${user} 的 Threads 分享`;
+                        
+                        dot.className = 'dot dot-ok';
+                        text.innerHTML = `"${fallback}"<br><small>包含原始連結</small>`;
+                        
+                        this.temp.threads = { content: fallback, url: url };
+                        this.notify('⚠️ 已準備好上傳（含原始連結）', 'warning');
+                    }
+                } catch (error) {
+                    const user = this.getUser(url);
+                    const fallback = `來自 @${user} 的 Threads 分享`;
+                    
+                    dot.className = 'dot dot-ok';
+                    text.innerHTML = `"${fallback}"<br><small>包含原始連結</small>`;
+                    
+                    this.temp.threads = { content: fallback, url: url };
+                    this.notify('⚠️ 內容解析完成', 'warning');
+                }
+                
+                this.checkReady();
+            }
+
+            checkReady() {
+                const btn = document.getElementById('submit');
+                
+                if (this.temp.location && this.temp.threads) {
+                    btn.classList.add('ready');
+                    btn.disabled = false;
+                } else {
+                    btn.classList.remove('ready');
+                    btn.disabled = true;
+                }
+            }
+
+            getCoords(url) {
+                try {
+                    const decoded = decodeURIComponent(url);
+                    
+                    const match = decoded.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+                    if (match) {
+                        const lat = parseFloat(match[1]);
+                        const lng = parseFloat(match[2]);
+                        if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                            return { lat, lng };
+                        }
+                    }
+
+                    const patterns = [
+                        /!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/,
+                        /ll=(-?\d+\.\d+),(-?\d+\.\d+)/,
+                        /center=(-?\d+\.\d+),(-?\d+\.\d+)/
+                    ];
+
+                    for (const pattern of patterns) {
+                        const m = decoded.match(pattern);
+                        if (m) {
+                            const lat = parseFloat(m[1]);
+                            const lng = parseFloat(m[2]);
+                            if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                                return { lat, lng };
+                            }
+                        }
+                    }
+                    
+                    return null;
+                } catch (error) {
+                    return null;
+                }
+            }
+
+            getName(url) {
+                try {
+                    const decoded = decodeURIComponent(url);
+                    const match = decoded.match(/\/place\/([^\/]+)/);
+                    return match ? match[1].replace(/\+/g, ' ').replace(/%20/g, ' ') : null;
+                } catch (error) {
+                    return null;
+                }
+            }
+
+            getUser(url) {
+                const match = url.match(/@([^\/]+)/);
+                return match ? match[1] : 'user';
+            }
+
+            async fetchContent(url) {
+                console.log('🔍 開始獲取內容');
+                
+                const methods = [
+                    async () => {
+                        const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+                        const response = await fetch(proxy, { signal: AbortSignal.timeout(8000) });
+                        const data = await response.json();
+                        return data.contents ? this.parseHTML(data.contents) : null;
+                    },
+                    
+                    async () => {
+                        const proxy = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+                        const response = await fetch(proxy, { signal: AbortSignal.timeout(8000) });
+                        const html = await response.text();
+                        return this.parseHTML(html);
+                    }
+                ];
+
+                for (let i = 0; i < methods.length; i++) {
+                    try {
+                        const result = await methods[i]();
+                        if (result && result.length > 20) {
+                            console.log(`✅ 方法 ${i + 1} 成功`);
+                            return result;
+                        }
+                    } catch (error) {
+                        console.log(`❌ 方法 ${i + 1} 失敗`);
+                    }
+                }
+
+                return null;
+            }
+
+            parseHTML(html) {
+                try {
+                    const patterns = [
+                        /<meta property="og:description" content="([^"]+)"/i,
+                        /<meta name="description" content="([^"]+)"/i,
+                        /<meta property="twitter:description" content="([^"]+)"/i
+                    ];
+                    
+                    for (const pattern of patterns) {
+                        const match = html.match(pattern);
+                        if (match && match[1] && match[1].length > 30) {
+                            const content = this.clean(match[1]);
+                            if (content && !this.isMeta(content)) {
+                                return content;
+                            }
+                        }
+                    }
+
+                    const jsonMatches = [...html.matchAll(/"text":"([^"]{30,}?)"/g)];
+                    for (const match of jsonMatches) {
+                        if (match[1]) {
+                            const content = this.clean(match[1]);
+                            if (content && !this.isMeta(content)) {
+                                return content;
+                            }
+                        }
+                    }
+
+                    return null;
+                } catch (error) {
+                    return null;
+                }
+            }
+
+            clean(text) {
+                if (!text) return null;
+                
+                return text
+                    .replace(/\\n/g, '\n')
+                    .replace(/\\"/g, '"')
+                    .replace(/&quot;/g, '"')
+                    .replace(/&amp;/g, '&')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+            }
+
+            isMeta(text) {
+                const words = ['threads', 'meta', 'instagram', 'login', 'sign up'];
+                const lower = text.toLowerCase();
+                return words.some(word => lower.includes(word) && text.length < 120);
+            }
+
+            submit() {
+                if (!this.temp.location || !this.temp.threads) {
+                    this.notify('❌ 請先完成位置和內容解析', 'error');
+                    return;
+                }
+
+                const place = {
+                    id: Date.now(),
+                    number: this.num++,
+                    name: this.temp.location.name,
+                    lat: this.temp.location.lat,
+                    lng: this.temp.location.lng,
+                    coordinates: this.temp.location.coordinates,
+                    mapUrl: this.temp.location.mapUrl,
+                    threadsContent: this.temp.threads.content,
+                    threadsUrl: this.temp.threads.url,
+                    createdAt: new Date().toISOString()
+                };
+
+                this.data.push(place);
+                this.addMarker(place);
+                this.refresh();
+                this.save();
+                
+                this.map.setView([place.lat, place.lng], 16);
+                this.closeAdd();
+                
+                this.notify(`🎉 成功上傳: ${place.name}`, 'success');
+            }
+
+            addMarker(place) {
+                const icon = L.divIcon({
+                    className: 'marker',
+                    html: place.number,
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 16],
+                    popupAnchor: [0, -16]
+                });
+
+                const marker = L.marker([place.lat, place.lng], { icon });
+
+                const preview = place.threadsContent.length > 120 
+                    ? place.threadsContent.substring(0, 120) + '...' 
+                    : place.threadsContent;
+
+                let html = `
+                    <div class="popup">
+                        <div class="popup-head">${place.name}</div>
+                        <div class="popup-coords">${place.coordinates}</div>
+                        <div class="bubble">
+                            ${preview}
+                            ${(place.threadsContent.length > 120 || place.threadsUrl) ? 
+                                `<div style="text-align: right; margin-top: 12px;">
+                                    ${place.threadsUrl ? 
+                                        `<a href="${place.threadsUrl}" target="_blank" class="more">📖 Read more</a>` : 
+                                        `<span class="more" onclick="alert('${place.threadsContent.replace(/'/g, "\\'")}')">📖 查看全文</span>`
+                                    }
+                                </div>` : ''
+                            }
+                        </div>
+                        <div class="popup-btns">
+                            <a href="${place.mapUrl}" target="_blank" class="popup-btn">📍 開啟地圖</a>
+                            <button onclick="app.delete(${place.id})" class="popup-btn red">🗑️ 刪除</button>
+                        </div>
+                    </div>
+                `;
+
+                marker.bindPopup(html, {
+                    maxWidth: 340,
+                    closeButton: true,
+                    autoClose: false,
+                    closeOnClick: false
+                });
+
+                this.markers.addLayer(marker);
+            }
+
+            openAdd() {
+                document.getElementById('add-dialog').style.display = 'flex';
+                this.reset();
+            }
+
+            closeAdd() {
+                document.getElementById('add-dialog').style.display = 'none';
+            }
+
+            reset() {
+                document.getElementById('maps-input').value = '';
+                document.getElementById('threads-input').value = '';
+                
+                document.getElementById('loc-dot').className = 'dot dot-wait';
+                document.getElementById('loc-text').textContent = '等待輸入 Google Maps 網址';
+                document.getElementById('threads-dot').className = 'dot dot-wait';
+                document.getElementById('threads-text').textContent = '等待輸入 Threads 網址';
+                
+                document.getElementById('submit').classList.remove('ready');
+                document.getElementById('submit').disabled = true;
+                
+                this.temp = {};
+            }
+
+            togglePanel() {
+                document.getElementById('panel').classList.toggle('show');
+            }
+
+            refresh() {
+                const list = document.getElementById('list');
+                const count = document.getElementById('count');
+                
+                count.textContent = this.data.length;
+                
+                if (this.data.length === 0) {
+                    list.innerHTML = '<div style="text-align: center; padding: 32px; color: #6c757d;">⭐ 還沒有收藏地點</div>';
+                } else {
+                    list.innerHTML = this.data.map(place => `
+                        <div class="card" onclick="app.focus(${place.lat}, ${place.lng})">
+                            <div class="card-header">
+                                <div class="number">${place.number}</div>
+                                <div class="title">${place.name}</div>
+                            </div>
+                            <div class="coords">${place.coordinates}</div>
+                            ${place.threadsContent ? `
+                                <div class="preview">
+                                    "${place.threadsContent.substring(0, 60)}${place.threadsContent.length > 60 ? '...' : ''}"
+                                </div>
+                            ` : ''}
+                        </div>
+                    `).join('');
+                }
+            }
+
+            focus(lat, lng) {
+                this.map.setView([lat, lng], 16);
+                this.markers.eachLayer(marker => {
+                    const pos = marker.getLatLng();
+                    if (Math.abs(pos.lat - lat) < 0.0001 && Math.abs(pos.lng - lng) < 0.0001) {
+                        marker.openPopup();
+                        return false;
+                    }
+                });
+                this.togglePanel();
+            }
+
+            delete(id) {
+                if (!confirm('確定要刪除這個地點嗎？')) return;
+                
+                this.data = this.data.filter(place => place.id !== id);
+                this.reload();
+                this.refresh();
+                this.save();
+                this.notify('地點已刪除', 'success');
+            }
+
+            reload() {
+                this.markers.clearLayers();
+                this.data.forEach(place => this.addMarker(place));
+            }
+
+            save() {
+                try {
+                    const obj = {
+                        data: this.data,
+                        num: this.num,
+                        saved: new Date().toISOString()
+                    };
+                    
+                    if (typeof localStorage !== 'undefined') {
+                        localStorage.setItem('threadsMapData', JSON.stringify(obj));
+                        console.log('💾 儲存到 localStorage');
+                    } else {
+                        this.storage = JSON.stringify(obj);
+                        console.log('💾 儲存到記憶體');
+                    }
+                } catch (error) {
+                    console.error('儲存失敗:', error);
+                    this.storage = JSON.stringify({
+                        data: this.data,
+                        num: this.num,
+                        saved: new Date().toISOString()
+                    });
+                }
+            }
+
+            load() {
+                try {
+                    let str = null;
+                    
+                    if (typeof localStorage !== 'undefined') {
+                        str = localStorage.getItem('threadsMapData');
+                        if (str) {
+                            console.log('📂 從 localStorage 載入');
+                        }
+                    }
+                    
+                    if (!str && this.storage) {
+                        str = this.storage;
+                        console.log('📂 從記憶體載入');
+                    }
+                    
+                    if (str) {
+                        const obj = JSON.parse(str);
+                        this.data = obj.data || [];
+                        this.num = obj.num || 1;
+                        
+                        this.data.forEach(place => this.addMarker(place));
+                        
+                        console.log(`✅ 載入 ${this.data.length} 個地點`);
+                        if (this.data.length > 0) {
+                            this.notify(`📂 載入了 ${this.data.length} 個地點`, 'success');
+                        }
+                    } else {
+                        console.log('📝 全新開始');
+                    }
+                } catch (error) {
+                    console.error('載入失敗:', error);
+                    this.data = [];
+                    this.num = 1;
+                    this.notify('⚠️ 載入失敗，全新開始', 'warning');
+                }
+            }
+
+            export() {
+                if (this.data.length === 0) {
+                    this.notify('沒有資料可匯出', 'warning');
+                    return;
+                }
+
+                const headers = ['標題', '座標', 'Google Maps網址', 'Threads內容', 'Threads網址', '儲存時間'];
+                const csv = [
+                    headers.join(','),
+                    ...this.data.map(place => [
+                        `"${place.name.replace(/"/g, '""')}"`,
+                        `"${place.coordinates}"`,
+                        `"${place.mapUrl}"`,
+                        `"${place.threadsContent.replace(/"/g, '""')}"`,
+                        `"${place.threadsUrl || ''}"`,
+                        `"${new Date(place.createdAt).toLocaleString('zh-TW')}"`
+                    ].join(','))
+                ].join('\n');
+
+                const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', `threads_places_${new Date().toISOString().split('T')[0]}.csv`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                this.notify(`📥 已匯出 ${this.data.length} 個地點`, 'success');
+            }
+
+            openImport() {
+                document.getElementById('import-dialog').style.display = 'flex';
+            }
+
+            closeImport() {
+                document.getElementById('import-dialog').style.display = 'none';
+            }
+
+            async import() {
+                const input = document.getElementById('csv-input');
+                const file = input.files[0];
+
+                if (!file) {
+                    this.notify('請選擇 CSV 檔案', 'error');
+                    return;
+                }
+
+                try {
+                    const text = await this.readFile(file);
+                    const parsed = this.parseCSV(text);
+                    
+                    if (parsed.length === 0) {
+                        this.notify('CSV 檔案沒有有效資料', 'error');
+                        return;
+                    }
+
+                    let count = 0;
+                    parsed.forEach(item => {
+                        const place = {
+                            id: Date.now() + Math.random(),
+                            number: this.num++,
+                            name: item.name,
+                            lat: item.lat,
+                            lng: item.lng,
+                            coordinates: item.coordinates,
+                            mapUrl: item.mapUrl,
+                            threadsContent: item.threadsContent,
+                            threadsUrl: item.threadsUrl,
+                            createdAt: item.createdAt || new Date().toISOString()
+                        };
+
+                        this.data.push(place);
+                        this.addMarker(place);
+                        count++;
+                    });
+
+                    this.refresh();
+                    this.save();
+                    this.closeImport();
+
+                    this.notify(`🎉 成功匯入 ${count} 個地點`, 'success');
+                } catch (error) {
+                    this.notify('CSV 檔案格式錯誤', 'error');
+                }
+            }
+
+            parseCSV(text) {
+                const lines = text.split('\n').filter(line => line.trim());
+                const results = [];
+
+                for (let i = 1; i < lines.length; i++) {
+                    try {
+                        const row = this.parseRow(lines[i]);
+                        
+                        if (row.length >= 3 && row[0] && row[1] && row[2]) {
+                            const coordMatch = row[1].match(/(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
+                            
+                            if (coordMatch) {
+                                const lat = parseFloat(coordMatch[1]);
+                                const lng = parseFloat(coordMatch[2]);
+                                
+                                if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                                    results.push({
+                                        name: row[0].trim(),
+                                        coordinates: row[1].trim(),
+                                        lat: lat,
+                                        lng: lng,
+                                        mapUrl: row[2].trim(),
+                                        threadsContent: row[3] ? row[3].trim() : '',
+                                        threadsUrl: row[4] ? row[4].trim() : '',
+                                        createdAt: row[5] ? row[5].trim() : new Date().toISOString()
+                                    });
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        console.warn(`第 ${i + 1} 行解析失敗`);
+                    }
+                }
+
+                return results;
+            }
+
+            parseRow(line) {
+                const result = [];
+                let current = '';
+                let inQuotes = false;
+
+                for (let i = 0; i < line.length; i++) {
+                    const char = line[i];
+                    const next = line[i + 1];
+
+                    if (char === '"') {
+                        if (inQuotes && next === '"') {
+                            current += '"';
+                            i++;
+                        } else {
+                            inQuotes = !inQuotes;
+                        }
+                    } else if (char === ',' && !inQuotes) {
+                        result.push(current);
+                        current = '';
+                    } else {
+                        current += char;
+                    }
+                }
+
+                result.push(current);
+                return result;
+            }
+
+            readFile(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = e => resolve(e.target.result);
+                    reader.onerror = e => reject(e);
+                    reader.readAsText(file, 'UTF-8');
+                });
+            }
+
+            clear() {
+                if (this.data.length === 0) {
+                    this.notify('沒有資料可清除', 'warning');
+                    return;
+                }
+
+                if (!confirm(`確定要清空所有 ${this.data.length} 個地點嗎？\n\n⚠️ 建議先匯出備份！`)) return;
+
+                this.data = [];
+                this.num = 1;
+                this.markers.clearLayers();
+                this.refresh();
+                this.save();
+                
+                if (typeof localStorage !== 'undefined') {
+                    localStorage.removeItem('threadsMapData');
+                }
+
+                this.notify('🗑️ 所有資料已清空', 'success');
+            }
+
+            notify(msg, type = 'success') {
+                const toast = document.getElementById('toast');
+                toast.className = `toast ${type}`;
+                toast.textContent = msg;
+                toast.style.display = 'block';
+                
+                setTimeout(() => {
+                    toast.style.display = 'none';
+                }, 3500);
+            }
+        }
+
+        let app;
+        document.addEventListener('DOMContentLoaded', () => {
+            app = new ThreadsApp();
+            window.app = app;
+            console.log('🎊 系統準備完成');
+        });
+    </script>
+</body>
+</html>
