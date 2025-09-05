@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Threads 地圖收藏 v3</title>
+    <title>Threads地圖收藏 v3</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
     <style>
         * { box-sizing: border-box; }
@@ -772,35 +772,54 @@
             getCoords(url) {
                 try {
                     const decoded = decodeURIComponent(url);
+                    console.log('解析URL:', decoded);
                     
-                    const match = decoded.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
-                    if (match) {
-                        const lat = parseFloat(match[1]);
-                        const lng = parseFloat(match[2]);
+                    // 方法1: Google Maps 的 3d/4d 格式 (最精確，優先使用)
+                    const match1 = decoded.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
+                    if (match1) {
+                        const lat = parseFloat(match1[1]);
+                        const lng = parseFloat(match1[2]);
                         if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                            console.log('3d/4d格式成功:', lat, lng);
                             return { lat, lng };
                         }
                     }
 
+                    // 方法2: 標準的 @lat,lng 格式 (作為備用)
+                    const match2 = decoded.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+                    if (match2) {
+                        const lat = parseFloat(match2[1]);
+                        const lng = parseFloat(match2[2]);
+                        if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                            console.log('@格式成功:', lat, lng);
+                            return { lat, lng };
+                        }
+                    }
+
+                    // 方法3: 其他可能的格式
                     const patterns = [
-                        /!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/,
                         /ll=(-?\d+\.\d+),(-?\d+\.\d+)/,
-                        /center=(-?\d+\.\d+),(-?\d+\.\d+)/
+                        /center=(-?\d+\.\d+),(-?\d+\.\d+)/,
+                        /!2d(-?\d+\.\d+)!3d(-?\d+\.\d+)/, // 另一種Google格式
+                        /q=(-?\d+\.\d+),(-?\d+\.\d+)/
                     ];
 
                     for (const pattern of patterns) {
-                        const m = decoded.match(pattern);
-                        if (m) {
-                            const lat = parseFloat(m[1]);
-                            const lng = parseFloat(m[2]);
+                        const match = decoded.match(pattern);
+                        if (match) {
+                            const lat = parseFloat(match[1]);
+                            const lng = parseFloat(match[2]);
                             if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                                console.log('其他方法成功:', lat, lng);
                                 return { lat, lng };
                             }
                         }
                     }
                     
+                    console.log('所有方法都失敗');
                     return null;
                 } catch (error) {
+                    console.error('座標解析錯誤:', error);
                     return null;
                 }
             }
@@ -1117,7 +1136,7 @@
                             this.notify(`📂 載入了 ${this.data.length} 個地點`, 'success');
                         }
                     } else {
-                        console.log('📝 全新開始');
+                        console.log('🆕 全新開始');
                     }
                 } catch (error) {
                     console.error('載入失敗:', error);
